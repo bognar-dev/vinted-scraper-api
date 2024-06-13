@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	vinted_scraper "vinted-scraper/internal/vinted-scraper"
+	vintedscraper "vinted-scraper/internal/vinted-scraper"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -25,13 +25,26 @@ func (s *Server) vintedTopicHandler(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	order := chi.URLParam(r, "order")
 	fmt.Println("topic:", topic)
-	result, err := vinted_scraper.Search(topic, vinted_scraper.ToOrder(order), "GBP")
+	result, err := vintedscraper.Search(topic, vintedscraper.ToOrder(order), "GBP")
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
-
-	_, _ = w.Write(result)
+	err = s.db.AddItems(result.Items, topic)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	response, err := json.Marshal(result)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	_, _ = w.Write(response)
 
 }
 
