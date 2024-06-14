@@ -25,27 +25,56 @@ func (s *Server) vintedTopicHandler(w http.ResponseWriter, r *http.Request) {
 	topic := chi.URLParam(r, "topic")
 	order := chi.URLParam(r, "order")
 	fmt.Println("topic:", topic)
-	result, err := vintedscraper.Search(topic, vintedscraper.ToOrder(order), "GBP")
-	if err != nil {
-		fmt.Println("Error:", err)
+	topicId, err := s.db.ExistsTopic(topic)
+	fmt.Println("topicId:", topicId)
+
+	if topicId != 0 {
+		go func() {
+			_, err := SearchAndInsert(err, topic, order, s)
+			if err != nil {
+				fmt.Println("Error searching in goroutine:", err)
+			}
+		}()
+		fmt.Println("Topic found")
+		getCachedItems(s, w, topicId)
 		return
 	}
-	err = s.db.AddItems(result.Items, topic)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
+	result, err := SearchAndInsert(err, topic, order, s)
 	response, err := json.Marshal(result)
 	if err != nil {
-		fmt.Println("Error:", err)
+		fmt.Println("Marshal error:", err)
 		return
 	}
 	_, _ = w.Write(response)
 
+}
+
+func SearchAndInsert(err error, topic string, order string, s *Server) (vintedscraper.VintedApi_Response, error) {
+	result, err := vintedscraper.Search(topic, vintedscraper.ToOrder(order), "GBP")
+	if err != nil {
+		fmt.Println("Error searching:", err)
+		return vintedscraper.VintedApi_Response{}, nil
+	}
+	err = s.db.AddItems(result.Items, topic)
+	if err != nil {
+		fmt.Println("Adding items to database error:", err)
+		return vintedscraper.VintedApi_Response{}, nil
+	}
+	return result, err
+}
+
+func getCachedItems(s *Server, w http.ResponseWriter, topicID int8) {
+	items, err := s.db.GetItems(topicID)
+	if err != nil {
+		fmt.Println("Error getting items from database:", err)
+		return
+	}
+	response, err := json.Marshal(items)
+	if err != nil {
+		fmt.Println("Marshal error:", err)
+		return
+	}
+	_, _ = w.Write(response)
 }
 
 func (s *Server) HelloWorldHandler(w http.ResponseWriter, r *http.Request) {

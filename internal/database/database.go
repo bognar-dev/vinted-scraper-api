@@ -45,6 +45,8 @@ type Service interface {
 	Prepare(ctx context.Context, query string) (*sql.Stmt, error)
 
 	AddItems(items []vinted_scraper.Item, topic string) error
+	ExistsTopic(topic string) (int8, error)
+	GetItems(topicId int8) (items []vinted_scraper.Item, err error)
 }
 
 type service struct {
@@ -206,7 +208,6 @@ func (s *service) AddItems(items []vinted_scraper.Item, topic string) error {
 // Helper function to insert a photo and return its ID
 func (s *service) insertPhoto(tx *sql.Tx, photo vinted_scraper.Photo) (int, error) {
 	var photoID int
-	fmt.Println("Inserting photo:", photo)
 	// Insert photo into the Photos table
 	err := tx.QueryRow("INSERT INTO Photos (id, ImageNo, Width, Height, DominantColor, DominantColorOpaque, URL, IsMain,  IsSuspicious, FullSizeURL, IsHidden) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (id) DO UPDATE SET id = $1 RETURNING id",
 		photo.ID, photo.ImageNo, photo.Width, photo.Height, photo.DominantColor, photo.DominantColorOpaque, photo.URL, photo.IsMain, photo.IsSuspicious, photo.FullSizeURL, photo.IsHidden).Scan(&photoID)
@@ -215,6 +216,110 @@ func (s *service) insertPhoto(tx *sql.Tx, photo vinted_scraper.Photo) (int, erro
 	}
 
 	return photoID, nil
+}
+
+func (s *service) ExistsTopic(topic string) (int8, error) {
+	var topicId int8
+	err := s.db.QueryRow("SELECT id FROM Topic WHERE name = $1", topic).Scan(&topicId)
+	fmt.Println("ExistsTopic", topic, ":", topicId)
+	if err != nil {
+		return 0, err
+	}
+	return topicId, nil
+}
+
+func (s *service) GetItems(topicId int8) (items []vinted_scraper.Item, err error) {
+	query := `
+        SELECT 
+            Item.id, Item.title, Item.price, Item.is_visible, Item.discount, 
+            Item.currency, Item.brand_title, Item.user_id, Item.url, Item.promoted, 
+            Item.photo_id, Item.favourite_count, Item.is_favourite, Item.badge, 
+            Item.conversion, Item.service_fee, Item.total_item_price, Item.total_item_price_rounded, 
+            Item.view_count, Item.size_title, Item.content_source, Item.status, 
+            Item.icon_badges, Item.search_tracking_params,
+            photos.id, photos.ImageNo, photos.Width, photos.Height, photos.DominantColor, 
+            photos.DominantColorOpaque, photos.URL, photos.IsMain,
+            photos.IsSuspicious, photos.FullSizeURL, photos.IsHidden
+        FROM 
+            Item
+        JOIN 
+            photos ON Item.photo_id = photos.id
+        WHERE 
+            Item.topic_id = $1`
+
+	rows, err := s.db.Query(query, topicId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() // Close the rows when we're done with them
+
+	for rows.Next() {
+		var item vinted_scraper.Item            // Declare a variable to store the current row
+		var photo vinted_scraper.Photo          // Declare a variable to store the current row
+		var iconBadges sql.NullString           // Declare a variable to store the current row
+		var searchTrackingParams sql.NullString // Declare a variable to store the current row
+		var highResID sql.NullString            // High resolution fields
+		var highResTimestamp sql.NullInt64
+		var highResOrientation sql.NullString
+
+		err = rows.Scan(&item.ID, &item.Title, &item.Price, &item.IsVisible, &item.Discount, &item.Currency, &item.BrandTitle,
+			&item.User.ID, &item.URL, &item.Promoted, &item.Photo.ID, &item.FavouriteCount, &item.IsFavourite,
+			&item.Badge, &item.Conversion, &item.ServiceFee, &item.TotalItemPrice, &item.TotalItemPriceRounded,
+			&item.ViewCount, &item.SizeTitle, &item.ContentSource, &item.Status, &iconBadges, &searchTrackingParams,
+			&photo.ID, &photo.ImageNo, &photo.Width, &photo.Height, &photo.DominantColor,
+			&photo.DominantColorOpaque, &photo.URL, &photo.IsMain,
+			&photo.IsSuspicious, &photo.FullSizeURL, &photo.IsHidden) // Scan the current row into the variables
+		if err != nil { // Check for errors
+			return nil, err
+		}
+
+		if iconBadges.Valid { // If the iconBadges variable is not null
+			item.IconBadges = parseIconBadges(iconBadges.String) // Parse the iconBadges string into a slice of interfaces
+		} else { // If the iconBadges variable is null
+			item.IconBadges = []interface{}{} // Set the iconBadges slice to an empty slice
+		}
+
+		if searchTrackingParams.Valid { // If the searchTrackingParams variable is not null
+			item.SearchTrackingParams = parseSearchTrackingParams(searchTrackingParams.String) // Parse the searchTrackingParams string into a struct
+		} else { // If the searchTrackingParams variable is null
+			item.SearchTrackingParams = struct {
+				Score          float64  `json:"score"`
+				MatchedQueries []string `json:"matched_queries"`
+			}{} // Set the searchTrackingParams struct to an empty struct
+		}
+
+		// Handle HighResolution field
+		if highResID.Valid {
+			photo.HighResolution.ID = highResID.String
+		}
+		if highResTimestamp.Valid {
+			photo.HighResolution.Timestamp = int(highResTimestamp.Int64)
+		}
+		if highResOrientation.Valid {
+			photo.HighResolution.Orientation = highResOrientation.String
+		}
+
+		item.Photo = photo          // Set the item's photo to the current row's photo
+		items = append(items, item) // Append the current row to the items slice
+	}
+
+	return items, nil
+}
+
+func parseIconBadges(iconBadges string) []interface{} {
+	// Implement your parsing logic here, this is just a placeholder
+	return []interface{}{iconBadges}
+}
+
+func parseSearchTrackingParams(searchTrackingParams string) struct {
+	Score          float64  `json:"score"`
+	MatchedQueries []string `json:"matched_queries"`
+} {
+	// Implement your parsing logic here, this is just a placeholder
+	return struct {
+		Score          float64  `json:"score"`
+		MatchedQueries []string `json:"matched_queries"`
+	}{}
 }
 
 // Exec executes a SQL query with the given arguments within the provided context.

@@ -8,25 +8,26 @@ type User struct {
 	ProfileURL string      `json:"profile_url"`
 	Photo      interface{} `json:"photo"` // Assuming photo can be null
 }
+type Thumbnail struct {
+	Type         string      `json:"type"`
+	URL          string      `json:"url"`
+	Width        int         `json:"width"`
+	Height       int         `json:"height"`
+	OriginalSize interface{} `json:"original_size"` // Assuming original_size can be null
+}
 
 // Photo represents the photo object inside each Item
 type Photo struct {
-	ID                  int    `json:"id"`
-	ImageNo             int    `json:"image_no"`
-	Width               int    `json:"width"`
-	Height              int    `json:"height"`
-	DominantColor       string `json:"dominant_color"`
-	DominantColorOpaque string `json:"dominant_color_opaque"`
-	URL                 string `json:"url"`
-	IsMain              bool   `json:"is_main"`
-	Thumbnails          []struct {
-		Type         string      `json:"type"`
-		URL          string      `json:"url"`
-		Width        int         `json:"width"`
-		Height       int         `json:"height"`
-		OriginalSize interface{} `json:"original_size"` // Assuming original_size can be null
-	} `json:"thumbnails"`
-	HighResolution struct {
+	ID                  int         `json:"id"`
+	ImageNo             int         `json:"image_no"`
+	Width               int         `json:"width"`
+	Height              int         `json:"height"`
+	DominantColor       string      `json:"dominant_color"`
+	DominantColorOpaque string      `json:"dominant_color_opaque"`
+	URL                 string      `json:"url"`
+	IsMain              bool        `json:"is_main"`
+	Thumbnails          []Thumbnail `json:"thumbnails"`
+	HighResolution      struct {
 		ID          string      `json:"id"`
 		Timestamp   int         `json:"timestamp"`
 		Orientation interface{} `json:"orientation"` // Assuming orientation can be null
