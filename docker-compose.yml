@@ -12,5 +12,17 @@ services:
     volumes:
       - ./seed.sql:/docker-entrypoint-seed.d/seed.sql
 
+  vinted-scraper:
+    build: ./cmd/api
+    environment:
+      DB_HOST: psql
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${PORT}:${PORT}"
+    depends_on:
+      - psql
 volumes:
   psql_volume:
