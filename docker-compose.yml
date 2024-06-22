@@ -12,8 +12,8 @@ services:
     volumes:
       - ./seed.sql:/docker-entrypoint-seed.d/seed.sql
 
-  vinted-scraper:
-    build: ./cmd/api
+  vinted-scraper-service:
+    build: ./
     environment:
       DB_HOST: psql
       DB_PORT: 5432
